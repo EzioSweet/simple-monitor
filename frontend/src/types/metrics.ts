@@ -42,3 +42,15 @@ export interface SystemMetrics {
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 export type TimeRange = '1h' | '6h' | '24h';
+
+export interface ProcessInfo {
+  pid: number;
+  name: string;
+  username: string;
+  cpuPercent: number;
+  memoryPercent: number;
+  memoryRss: number;  // bytes
+  status: string;
+  numThreads: number;
+  createTime: number;
+}

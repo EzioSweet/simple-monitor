@@ -1,8 +1,8 @@
 /**
- * API configuration using environment variables
+ * API configuration
  */
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+export const API_BASE_URL = '/api';
 
 export const API_ENDPOINTS = {
   METRICS_CURRENT: `${API_BASE_URL}/metrics/current`,

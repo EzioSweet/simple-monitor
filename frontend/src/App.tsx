@@ -1,6 +1,6 @@
 import { Show, createSignal } from 'solid-js';
 import useSSEMetrics from './hooks/useSSEMetrics';
-import { CPUMonitor, MemoryMonitor, DiskMonitor, NetworkMonitor, HistoricalView } from './components';
+import { CPUMonitor, MemoryMonitor, DiskMonitor, NetworkMonitor, HistoricalView, ProcessMonitor } from './components';
 import type { ConnectionStatus, TimeRange } from './types';
 
 /**
@@ -72,7 +72,7 @@ const LoadingSkeleton = () => (
  */
 const App = () => {
   const { metrics, connectionStatus, reconnect } = useSSEMetrics();
-  const [activeTab, setActiveTab] = createSignal<'realtime' | 'historical'>('realtime');
+  const [activeTab, setActiveTab] = createSignal<'realtime' | 'historical' | 'processes'>('realtime');
   const [timeRange, setTimeRange] = createSignal<TimeRange>('1h');
 
   const isLoading = () => connectionStatus() === 'connecting' && !metrics();
@@ -98,10 +98,7 @@ const App = () => {
           <div class="flex gap-4 mt-4">
             <button
               type="button"
-              onClick={() => {
-                console.log('Switching to realtime');
-                setActiveTab('realtime');
-              }}
+              onClick={() => setActiveTab('realtime')}
               class={`px-4 py-2 text-sm font-medium rounded-t transition-colors cursor-pointer ${
                 activeTab() === 'realtime'
                   ? 'bg-gray-900 text-white border-b-2 border-blue-500'
@@ -113,10 +110,19 @@ const App = () => {
             </button>
             <button
               type="button"
-              onClick={() => {
-                console.log('Switching to historical');
-                setActiveTab('historical');
-              }}
+              onClick={() => setActiveTab('processes')}
+              class={`px-4 py-2 text-sm font-medium rounded-t transition-colors cursor-pointer ${
+                activeTab() === 'processes'
+                  ? 'bg-gray-900 text-white border-b-2 border-blue-500'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              <span class="i-carbon-application mr-2" />
+              Processes
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('historical')}
               class={`px-4 py-2 text-sm font-medium rounded-t transition-colors cursor-pointer ${
                 activeTab() === 'historical'
                   ? 'bg-gray-900 text-white border-b-2 border-blue-500'
@@ -192,6 +198,11 @@ const App = () => {
               </div>
             </Show>
           </Show>
+        </Show>
+
+        {/* Processes View */}
+        <Show when={activeTab() === 'processes'}>
+          <ProcessMonitor />
         </Show>
 
         {/* Historical View */}

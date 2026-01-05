@@ -2,17 +2,19 @@
 
 import asyncio
 import json
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from database import DatabaseService
-from metrics_collector import MetricsCollector, SystemMetrics
+from metrics_collector import MetricsCollector, SystemMetrics, ProcessInfo
 from models import MetricsRecord
 from sse_handler import SSEHandler
 
@@ -77,21 +79,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {"message": "System Monitoring Dashboard API"}
 
 
 @app.get("/health")
@@ -318,3 +305,74 @@ async def stream_metrics(request: Request):
         )
     
     return EventSourceResponse(stream_metrics_with_storage(request))
+
+
+@app.get(
+    "/api/processes",
+    response_model=List[dict],
+    responses={
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    }
+)
+async def get_processes(
+    limit: int = Query(default=20, ge=1, le=100, description="Number of processes to return"),
+    sort_by: str = Query(default="cpu", regex="^(cpu|memory)$", description="Sort by 'cpu' or 'memory'")
+):
+    """
+    Get top processes sorted by CPU or memory usage (similar to top command).
+    """
+    if metrics_collector is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Metrics collector not initialized"
+        )
+    
+    try:
+        processes = metrics_collector.collect_process_metrics(limit=limit, sort_by=sort_by)
+        return [
+            {
+                "pid": p.pid,
+                "name": p.name,
+                "username": p.username,
+                "cpuPercent": p.cpu_percent,
+                "memoryPercent": p.memory_percent,
+                "memoryRss": p.memory_rss,
+                "status": p.status,
+                "numThreads": p.num_threads,
+                "createTime": p.create_time
+            }
+            for p in processes
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to collect process metrics: {str(e)}"
+        )
+
+
+# Static files for frontend
+# Put frontend build output in backend/static directory
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+if os.path.exists(STATIC_DIR):
+    # Serve static assets (js, css, images, etc.)
+    app.mount("/static", StaticFiles(directory=os.path.join(STATIC_DIR, "static")), name="assets")
+    
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve SPA - return index.html for all non-API routes."""
+        # Skip API routes
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        
+        # Try to serve the exact file first
+        file_path = os.path.join(STATIC_DIR, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        # Fall back to index.html for SPA routing
+        index_path = os.path.join(STATIC_DIR, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        
+        raise HTTPException(status_code=404, detail="Not found")

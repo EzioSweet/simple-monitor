@@ -39,6 +39,19 @@ class NetworkMetrics(BaseModel):
     download_rate: float  # bytes per second
 
 
+class ProcessInfo(BaseModel):
+    """Process information similar to top command."""
+    pid: int
+    name: str
+    username: str
+    cpu_percent: float
+    memory_percent: float
+    memory_rss: int  # bytes
+    status: str
+    num_threads: int
+    create_time: float
+
+
 class SystemMetrics(BaseModel):
     """Complete system metrics snapshot."""
     timestamp: datetime
@@ -165,6 +178,46 @@ class MetricsCollector:
             download_rate=download_rate
         )
     
+    def collect_process_metrics(self, limit: int = 20, sort_by: str = 'cpu') -> List[ProcessInfo]:
+        """
+        Collect top processes sorted by CPU or memory usage.
+        
+        Args:
+            limit: Maximum number of processes to return
+            sort_by: Sort criteria ('cpu' or 'memory')
+            
+        Returns:
+            List of ProcessInfo for top processes
+        """
+        processes = []
+        
+        for proc in psutil.process_iter(['pid', 'name', 'username', 'cpu_percent', 
+                                          'memory_percent', 'memory_info', 'status', 
+                                          'num_threads', 'create_time']):
+            try:
+                info = proc.info
+                processes.append(ProcessInfo(
+                    pid=info['pid'],
+                    name=info['name'] or 'Unknown',
+                    username=info['username'] or 'Unknown',
+                    cpu_percent=info['cpu_percent'] or 0.0,
+                    memory_percent=info['memory_percent'] or 0.0,
+                    memory_rss=info['memory_info'].rss if info['memory_info'] else 0,
+                    status=info['status'] or 'unknown',
+                    num_threads=info['num_threads'] or 0,
+                    create_time=info['create_time'] or 0.0
+                ))
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        
+        # Sort by specified criteria
+        if sort_by == 'memory':
+            processes.sort(key=lambda p: p.memory_percent, reverse=True)
+        else:
+            processes.sort(key=lambda p: p.cpu_percent, reverse=True)
+        
+        return processes[:limit]
+
     def collect_all_metrics(self) -> SystemMetrics:
         """
         Collect all system metrics in one call.
