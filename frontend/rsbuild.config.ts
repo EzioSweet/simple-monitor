@@ -10,6 +10,9 @@ export default defineConfig({
     }),
     pluginSolid(),
   ],
+  html: {
+    title: 'System Monitor',
+  },
   server:{
     proxy:{
       '/api':'http://localhost:8000'
