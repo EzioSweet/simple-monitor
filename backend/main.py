@@ -307,47 +307,50 @@ async def stream_metrics(request: Request):
     return EventSourceResponse(stream_metrics_with_storage(request))
 
 
-@app.get(
-    "/api/processes",
-    response_model=List[dict],
-    responses={
-        500: {"model": ErrorResponse, "description": "Internal server error"}
-    }
-)
-async def get_processes(
-    limit: int = Query(default=20, ge=1, le=100, description="Number of processes to return"),
-    sort_by: str = Query(default="cpu", regex="^(cpu|memory)$", description="Sort by 'cpu' or 'memory'")
-):
-    """
-    Get top processes sorted by CPU or memory usage (similar to top command).
-    """
-    if metrics_collector is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Metrics collector not initialized"
-        )
-    
+async def stream_processes(request: Request, limit: int, sort_by: str):
+    """Generate SSE events for process data."""
     try:
-        processes = metrics_collector.collect_process_metrics(limit=limit, sort_by=sort_by)
-        return [
-            {
-                "pid": p.pid,
-                "name": p.name,
-                "username": p.username,
-                "cpuPercent": p.cpu_percent,
-                "memoryPercent": p.memory_percent,
-                "memoryRss": p.memory_rss,
-                "status": p.status,
-                "numThreads": p.num_threads,
-                "createTime": p.create_time
-            }
-            for p in processes
-        ]
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to collect process metrics: {str(e)}"
-        )
+        while True:
+            if await request.is_disconnected():
+                break
+            
+            if metrics_collector is None:
+                break
+            
+            processes = metrics_collector.collect_process_metrics(limit=limit, sort_by=sort_by)
+            event_data = [
+                {
+                    "pid": p.pid,
+                    "name": p.name,
+                    "username": p.username,
+                    "cpuPercent": p.cpu_percent,
+                    "memoryPercent": p.memory_percent,
+                    "memoryRss": p.memory_rss,
+                    "status": p.status,
+                    "numThreads": p.num_threads,
+                    "createTime": p.create_time
+                }
+                for p in processes
+            ]
+            
+            yield {"event": "processes", "data": json.dumps(event_data)}
+            await asyncio.sleep(1)
+            
+    except asyncio.CancelledError:
+        pass
+
+
+@app.get("/api/processes/stream")
+async def stream_processes_endpoint(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+    sort_by: str = Query(default="cpu", pattern="^(cpu|memory)$")
+):
+    """SSE endpoint for real-time process streaming."""
+    if metrics_collector is None:
+        raise HTTPException(status_code=500, detail="Metrics collector not initialized")
+    
+    return EventSourceResponse(stream_processes(request, limit, sort_by))
 
 
 # Static files for frontend

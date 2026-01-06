@@ -9,32 +9,54 @@ const ProcessMonitor = () => {
   const [sortBy, setSortBy] = createSignal<SortBy>('cpu');
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
+  const [connected, setConnected] = createSignal(false);
 
-  const fetchProcesses = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/processes?limit=15&sort_by=${sortBy()}`);
-      if (!res.ok) throw new Error('Failed to fetch processes');
-      const data = await res.json();
-      setProcesses(data);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-    } finally {
-      setLoading(false);
+  let eventSource: EventSource | null = null;
+
+  const connectSSE = () => {
+    if (eventSource) {
+      eventSource.close();
     }
+
+    setLoading(true);
+    setError(null);
+
+    eventSource = new EventSource(`${API_BASE_URL}/processes/stream?limit=15&sort_by=${sortBy()}`);
+
+    eventSource.addEventListener('processes', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setProcesses(data);
+        setLoading(false);
+        setConnected(true);
+        setError(null);
+      } catch (e) {
+        console.error('Failed to parse process data:', e);
+      }
+    });
+
+    eventSource.onerror = () => {
+      setConnected(false);
+      setError('Connection lost, reconnecting...');
+      eventSource?.close();
+      // Reconnect after 3 seconds
+      setTimeout(connectSSE, 3000);
+    };
+
+    eventSource.onopen = () => {
+      setConnected(true);
+      setError(null);
+    };
   };
 
-  // Initial fetch and polling every 2 seconds
+  // Connect on mount and when sortBy changes
   createEffect(() => {
-    fetchProcesses();
-    const interval = setInterval(fetchProcesses, 2000);
-    onCleanup(() => clearInterval(interval));
+    const sort = sortBy(); // track dependency
+    connectSSE();
   });
 
-  // Refetch when sort changes
-  createEffect(() => {
-    sortBy(); // track dependency
-    fetchProcesses();
+  onCleanup(() => {
+    eventSource?.close();
   });
 
   const formatMemory = (bytes: number) => {
@@ -60,6 +82,7 @@ const ProcessMonitor = () => {
         <h2 class="text-lg font-semibold text-white flex items-center gap-2">
           <span class="i-carbon-application text-xl" />
           Processes
+          <span class={`w-2 h-2 rounded-full ${connected() ? 'bg-green-500' : 'bg-red-500'}`} />
         </h2>
         <div class="flex gap-2">
           <button

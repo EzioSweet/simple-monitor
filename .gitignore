@@ -19,6 +19,7 @@ coverage/
 # Universal
 .DS_Store
 Thumbs.db
+*.db
 *.tmp
 *.swp
 .vscode/
