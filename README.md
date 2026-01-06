@@ -107,4 +107,4 @@ npm run build
 
 ## 许可证
 
-MIT License
+BSD 3-Clause License
