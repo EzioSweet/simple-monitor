@@ -79,7 +79,7 @@ const App = () => {
   const hasData = () => metrics() !== null;
 
   return (
-    <div class="min-h-screen bg-gray-900 text-white">
+    <div class="min-h-screen bg-gray-900 text-white flex flex-col">
       {/* Header */}
       <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-10">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -137,7 +137,7 @@ const App = () => {
       </header>
 
       {/* Main Content */}
-      <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
         {/* Real-time View */}
         <Show when={activeTab() === 'realtime'}>
           <Show when={isLoading()}>
