@@ -1,7 +1,7 @@
 """Metrics collector for system monitoring using psutil."""
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 import psutil
 from pydantic import BaseModel
@@ -225,7 +225,7 @@ class MetricsCollector:
         Returns:
             SystemMetrics containing all metric types
         """
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
         
         cpu = self.collect_cpu_metrics()
         memory = self.collect_memory_metrics()
